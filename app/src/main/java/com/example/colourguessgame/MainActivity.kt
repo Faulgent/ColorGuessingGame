@@ -33,6 +33,7 @@ private const val MAX_ITEMS_IN_ROW: Int = 3
 
 class MainActivity : ComponentActivity() {
     private var answersState = mutableStateOf(RoundVariables())
+    @OptIn(ExperimentalStdlibApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
                             ),
                         submitAnswer = { color -> submitAnswer(color) },
                         answers = answersState.value.answers,
+                        colorCode = answersState.value.correctAnswer.value.toHexString(format = HexFormat.UpperCase).substring(0, 6),
                     )
                 }
             }
@@ -86,6 +88,7 @@ fun ColorPresenter(
     modifier: Modifier = Modifier,
     submitAnswer: (Color) -> Unit,
     answers: List<Color>,
+    colorCode: String,
 ) {
     Column(
         modifier = modifier
@@ -99,7 +102,7 @@ fun ColorPresenter(
             style = Typography.headlineLarge,
         )
         Text(
-            text = "color code",
+            text = colorCode,
             style = Typography.headlineMedium,
         )
         PossibleAnswers(variants = answers, submitAnswer = submitAnswer)
