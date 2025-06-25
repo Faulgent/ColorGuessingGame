@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Scaffold
@@ -24,15 +25,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.colourguessgame.ui.theme.ColourGuessGameTheme
 import com.example.colourguessgame.ui.theme.Typography
-
 
 private const val MAX_ITEMS_IN_ROW: Int = 3
 
 class MainActivity : ComponentActivity() {
     private var answersState = mutableStateOf(RoundVariables())
+
     @OptIn(ExperimentalStdlibApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,8 +49,10 @@ class MainActivity : ComponentActivity() {
                                 answersState.value.background
                             ),
                         submitAnswer = { color -> submitAnswer(color) },
-                        answers = answersState.value.answers,
-                        colorCode = answersState.value.correctAnswer.value.toHexString(format = HexFormat.UpperCase).substring(0, 6),
+                        gameState = answersState.value,
+                        colorCode = answersState.value.correctAnswer.value.toHexString(format = HexFormat.UpperCase)
+                            .substring(0, 6),
+                        startNewRound = { startNewRound() },
                     )
                 }
             }
@@ -68,8 +72,8 @@ class MainActivity : ComponentActivity() {
     private fun victory() {
         answersState.value = answersState.value.copy(
             background = Color.Green,
+            shouldStartNewRound = true,
         )
-        //startNewRound()
     }
 
     private fun startNewRound() {
@@ -79,16 +83,23 @@ class MainActivity : ComponentActivity() {
 
 data class RoundVariables(
     val correctAnswer: Color = Color(0xFFFFFFFF),
-    val answers: List<Color> = mutableListOf(Color(0XFFFFFFFF), Color(0XFF00FFFF), Color(0XFFFF00FF), Color(0XFFFFFF00)),
-    val background: Color = Color(0xFFFFFFFF)
+    val answers: List<Color> = mutableListOf(
+        Color(0XFFFFFFFF),
+        Color(0XFF00FFFF),
+        Color(0XFFFF00FF),
+        Color(0XFFFFFF00)
+    ),
+    val background: Color = Color(0xFF808080),
+    val shouldStartNewRound: Boolean = false,
 )
 
 @Composable
 fun ColorPresenter(
     modifier: Modifier = Modifier,
     submitAnswer: (Color) -> Unit,
-    answers: List<Color>,
+    gameState: RoundVariables,
     colorCode: String,
+    startNewRound: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -105,7 +116,15 @@ fun ColorPresenter(
             text = colorCode,
             style = Typography.headlineMedium,
         )
-        PossibleAnswers(variants = answers, submitAnswer = submitAnswer)
+        PossibleAnswers(variants = gameState.answers, submitAnswer = submitAnswer)
+        if (gameState.shouldStartNewRound) {
+            Button(
+                onClick = { startNewRound() },
+                modifier = Modifier.padding(top = 20.dp),
+            ) {
+                Text(text = "Start New Round")
+            }
+        }
     }
 }
 
@@ -131,18 +150,23 @@ fun PossibleAnswers(
                 onClick = { submitAnswer(variant) },
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(variant)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(variant)
                 )
             }
         }
     }
 }
 
-/*
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
     ColourGuessGameTheme {
-        ColorPresenter()
+        ColorPresenter(
+            submitAnswer = {},
+            gameState = RoundVariables(),
+            colorCode = "FFFFFF"
+        )
     }
-}*/
+}
