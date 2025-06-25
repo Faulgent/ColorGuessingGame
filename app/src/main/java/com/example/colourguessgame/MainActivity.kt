@@ -29,11 +29,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.colourguessgame.ui.theme.ColourGuessGameTheme
 import com.example.colourguessgame.ui.theme.Typography
+import java.lang.Math.random
 
 private const val MAX_ITEMS_IN_ROW: Int = 3
 
 class MainActivity : ComponentActivity() {
-    private var answersState = mutableStateOf(RoundVariables())
+    private var gameState = mutableStateOf(GameVariables(RoundVariables()))
 
     @OptIn(ExperimentalStdlibApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,17 +43,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             ColourGuessGameTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ColorPresenter(
+                    GameUi(
                         modifier = Modifier
-                            .padding(innerPadding)
-                            .background(
-                                answersState.value.background
-                            ),
+                            .padding(innerPadding),
                         submitAnswer = { color -> submitAnswer(color) },
-                        gameState = answersState.value,
-                        colorCode = answersState.value.correctAnswer.value.toHexString(format = HexFormat.UpperCase)
-                            .substring(0, 6),
+                        gameState = gameState.value,
+                        colorCode = '#' + gameState.value.roundVariables.correctAnswer.value.toHexString(
+                            format = HexFormat.UpperCase
+                        )
+                            .substring(2, 8),
                         startNewRound = { startNewRound() },
+                        startNewGame = { startNewGame() },
                     )
                 }
             }
@@ -60,54 +61,125 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun submitAnswer(answer: Color) {
-        if (answer == answersState.value.correctAnswer) {
-            victory()
-        } else {
-            answersState.value = answersState.value.copy(
-                answers = answersState.value.answers.filter { it != answer }
-            )
+        when {
+            answer == gameState.value.roundVariables.correctAnswer -> roundVictory()
+            gameState.value.lives > 1 -> wrongAnswer(answer)
+            else -> gameLost()
         }
     }
 
-    private fun victory() {
-        answersState.value = answersState.value.copy(
-            background = Color.Green,
-            shouldStartNewRound = true,
+    private fun gameLost() {
+        gameState.value = gameState.value.copy(
+            lives = gameState.value.lives - 1,
+        )
+    }
+
+    private fun wrongAnswer(answer: Color) {
+        gameState.value = gameState.value.copy(
+            roundVariables = gameState.value.roundVariables.copy(
+                answers = gameState.value.roundVariables.answers.filter { it != answer },
+            ),
+            lives = gameState.value.lives - 1,
+        )
+    }
+
+    private fun roundVictory() {
+        gameState.value = gameState.value.copy(
+            roundVariables = gameState.value.roundVariables.copy(
+                shouldStartNewRound = true,
+            ),
+            points = gameState.value.points + 1,
         )
     }
 
     private fun startNewRound() {
-        answersState.value = RoundVariables()
+        gameState.value = gameState.value.copy(
+            roundVariables = RoundVariables()
+        )
+    }
+
+    private fun startNewGame() {
+        gameState.value = GameVariables(RoundVariables())
+
     }
 }
 
+data class GameVariables(
+    val roundVariables: RoundVariables,
+    val lives: Int = 5,
+    val points: Int = 0,
+)
+
 data class RoundVariables(
-    val correctAnswer: Color = Color(0xFFFFFFFF),
-    val answers: List<Color> = mutableListOf(
-        Color(0XFFFFFFFF),
-        Color(0XFF00FFFF),
-        Color(0XFFFF00FF),
-        Color(0XFFFFFF00)
-    ),
-    val background: Color = Color(0xFF808080),
+    val answers: List<Color> = generateColorList(4),
+    val correctAnswer: Color = answers.random(),
     val shouldStartNewRound: Boolean = false,
 )
 
+fun generateColorList(counter: Int): List<Color> {
+    val colorList = mutableListOf<Color>()
+    for (i in 0 until counter) {
+        colorList.add(
+            Color(
+                alpha = 1f,
+                red = random().toFloat(),
+                green = random().toFloat(),
+                blue = random().toFloat()
+            )
+        )
+    }
+    return colorList
+}
+
 @Composable
-fun ColorPresenter(
+fun GameUi(
     modifier: Modifier = Modifier,
     submitAnswer: (Color) -> Unit,
-    gameState: RoundVariables,
+    gameState: GameVariables,
     colorCode: String,
-    startNewRound: () -> Unit = {},
+    startNewRound: () -> Unit,
+    startNewGame: () -> Unit,
+) {
+    if (gameState.lives == 0) {
+        FinalScore(
+            gameState = gameState,
+            startNewGame = startNewGame,
+        )
+    } else {
+        GameScreen(
+            modifier = modifier,
+            submitAnswer = submitAnswer,
+            gameState = gameState,
+            colorCode = colorCode,
+            startNewRound = startNewRound,
+        )
+    }
+}
+
+@Composable
+fun GameScreen(
+    modifier: Modifier = Modifier,
+    submitAnswer: (Color) -> Unit,
+    gameState: GameVariables,
+    colorCode: String,
+    startNewRound: () -> Unit,
 ) {
     Column(
         modifier = modifier
+            .background(Color(0xFF808080))
             .fillMaxSize()
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Text(
+            text = "Life: ${gameState.lives}",
+            style = Typography.headlineMedium,
+        )
+        Text(
+            text = "Points: ${gameState.points}",
+            style = Typography.headlineMedium,
+        )
         Text(
             text = "Guess the color",
             style = Typography.headlineLarge,
@@ -116,21 +188,50 @@ fun ColorPresenter(
             text = colorCode,
             style = Typography.headlineMedium,
         )
-        PossibleAnswers(variants = gameState.answers, submitAnswer = submitAnswer)
-        if (gameState.shouldStartNewRound) {
+        PossibleAnswers(gameState = gameState, submitAnswer = submitAnswer)
+        if (gameState.roundVariables.shouldStartNewRound) {
             Button(
                 onClick = { startNewRound() },
                 modifier = Modifier.padding(top = 20.dp),
             ) {
-                Text(text = "Start New Round")
+                Text(text = "Next Round!")
             }
         }
     }
 }
 
 @Composable
+fun FinalScore(
+    gameState: GameVariables,
+    startNewGame: () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .background(Color(0xFF27a567))
+            .fillMaxSize()
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "Game Over",
+            style = Typography.headlineLarge,
+        )
+        Text(
+            text = "Your final score is ${gameState.points}",
+            style = Typography.headlineMedium,
+        )
+        Button(
+            onClick = startNewGame,
+        ) {
+            Text(text = "Start New Game")
+        }
+    }
+}
+
+@Composable
 fun PossibleAnswers(
-    variants: List<Color>,
+    gameState: GameVariables,
     submitAnswer: (Color) -> Unit,
 ) {
     LazyVerticalGrid(
@@ -141,13 +242,17 @@ fun PossibleAnswers(
         verticalArrangement = Arrangement.SpaceBetween,
         columns = GridCells.Fixed(MAX_ITEMS_IN_ROW),
     ) {
-        items(variants) { variant ->
+        items(gameState.roundVariables.answers) { variant ->
             Card(
                 shape = CardDefaults.elevatedShape,
                 modifier = Modifier
                     .padding(5.dp)
                     .aspectRatio(1f),
-                onClick = { submitAnswer(variant) },
+                onClick = if (!gameState.roundVariables.shouldStartNewRound) {
+                    { submitAnswer(variant) }
+                } else {
+                    {}
+                },
             ) {
                 Box(
                     modifier = Modifier
@@ -163,10 +268,14 @@ fun PossibleAnswers(
 @Composable
 fun GreetingPreview() {
     ColourGuessGameTheme {
-        ColorPresenter(
+        GameUi(
             submitAnswer = {},
-            gameState = RoundVariables(),
-            colorCode = "FFFFFF"
+            gameState = GameVariables(
+                roundVariables = RoundVariables(),
+            ),
+            colorCode = "",
+            startNewRound = {},
+            startNewGame = {},
         )
     }
 }
